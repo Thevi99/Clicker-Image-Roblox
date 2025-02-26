@@ -1,0 +1,85 @@
+import cv2
+import numpy as np
+import pyautogui
+import time
+import keyboard
+
+# โหลดภาพปุ่ม SHAKE ทั้งภาษาไทยและภาษาอังกฤษ
+template = cv2.imread('shake_button1.png', cv2.IMREAD_UNCHANGED)
+template_Eng = cv2.imread('shake_button.png', cv2.IMREAD_UNCHANGED)
+
+# ฟังก์ชันตรวจจับปุ่ม ลากเมาส์ และคลิก
+def detect_drag_and_click():
+    state = False  # สถานะการทำงาน เริ่มต้นเป็น False (ยังไม่ทำงาน)
+
+    while True:
+        # ตรวจสอบการกดปุ่มเริ่ม/หยุด
+        if keyboard.is_pressed('u'):
+            state = True
+            print("Started detection (Press 'q' to stop).")
+            time.sleep(0.5)  # ป้องกันการกดซ้ำเร็วเกินไป
+
+        if keyboard.is_pressed('q'):
+            state = False
+            print("Stopped detection (Press 'u' to start).")
+            time.sleep(0.5)  # ป้องกันการกดซ้ำเร็วเกินไป
+
+        if not state:
+            time.sleep(0.1)  # หากยังไม่เริ่มทำงาน ให้รอต่อไป
+            continue
+
+        # จับภาพหน้าจอ
+        screenshot = pyautogui.screenshot()
+        frame = np.array(screenshot)
+
+        # แปลงภาพเป็นโหมดสีที่ OpenCV ใช้งาน
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        template_Eng_gray = cv2.cvtColor(template_Eng, cv2.COLOR_BGR2GRAY)
+
+        # ใช้ matchTemplate กับ template ไทย
+        result1 = cv2.matchTemplate(frame, template_gray, cv2.TM_CCOEFF_NORMED)
+        min_val1, max_val1, min_loc1, max_loc1 = cv2.minMaxLoc(result1)
+
+        # ใช้ matchTemplate กับ template อังกฤษ
+        result2 = cv2.matchTemplate(frame, template_Eng_gray, cv2.TM_CCOEFF_NORMED)
+        min_val2, max_val2, min_loc2, max_loc2 = cv2.minMaxLoc(result2)
+
+        # ตรวจสอบเทมเพลตที่มีความแม่นยำสูงที่สุด
+        if max_val1 > 0.8 or max_val2 > 0.8:  # เกณฑ์ความแม่นยำ
+            if max_val1 > max_val2:
+                x, y = max_loc1
+                w, h = template.shape[1], template.shape[0]
+                print("Detected using template (ภาษาไทย)")
+            else:
+                x, y = max_loc2
+                w, h = template_Eng.shape[1], template_Eng.shape[0]
+                print("Detected using template_Eng (ภาษาอังกฤษ)")
+
+            end_x, end_y = x + w // 2, y + h // 2
+
+            print(f"Target Location: ({end_x}, {end_y})")
+
+            # ตำแหน่งเมาส์เริ่มต้น
+            start_x, start_y = pyautogui.position()
+
+            # ลากเมาส์แบบ Smooth
+            steps = 50
+            for i in range(steps + 1):
+                intermediate_x = start_x + (end_x - start_x) * i / steps
+                intermediate_y = start_y + (end_y - start_y) * i / steps
+                pyautogui.moveTo(intermediate_x, intermediate_y)
+                time.sleep(0.01)
+
+            # คลิกซ้ายที่ตำแหน่งเป้าหมาย
+            pyautogui.click()
+            print(f"Clicked at: ({end_x}, {end_y})")
+            time.sleep(0.5)
+
+        time.sleep(0.1)
+
+# เรียกใช้งาน
+try:
+    detect_drag_and_click()
+except Exception as e:
+    print(f"An error occurred: {e}")
